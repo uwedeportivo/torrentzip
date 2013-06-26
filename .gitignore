@@ -20,3 +20,12 @@ _cgo_export.*
 _testmain.go
 
 *.exe
+
+.DS_Store
+czip/.DS_Store
+czip/example_test.go
+czip/reader_test.go
+czip/testdata/
+czip/writer_test.go
+czip/zip_test.go
+
