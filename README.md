@@ -18,7 +18,7 @@ Th torrentzip format also does not specify zip64 sections, so it's not clear wha
 
 ## Format explained
 
-This section was kindly provided by GordonJ. 
+This section is the document [trrntzip_explained.doc](http://www.romvault.com/trrntzip_explained.doc) by GordonJ converted to Markdown. 
 
 torrentzip is a valid zip file. For a full description of the zip files specification:
 [http://www.pkware.com/documents/casestudies/APPNOTE.TXT](http://www.pkware.com/documents/casestudies/APPNOTE.TXT)
