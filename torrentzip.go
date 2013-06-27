@@ -38,6 +38,7 @@ import (
 	"io"
 	"io/ioutil"
 	"os"
+	"path/filepath"
 	"sort"
 	"strings"
 
@@ -99,6 +100,13 @@ func (fis fileIndices) Less(i, j int) bool {
 	return strings.ToLower(fis[i].name) < strings.ToLower(fis[j].name)
 }
 
+func torrentCanonicalName(name string) string {
+	if filepath.Separator != '/' {
+		name = strings.Replace(name, string(filepath.Separator), "/", -1)
+	}
+	return name
+}
+
 func (w *Writer) Close() error {
 	err := w.uw.Close()
 	if err != nil {
@@ -124,7 +132,7 @@ func (w *Writer) Close() error {
 
 	for k, zf := range r.File {
 		fis[k] = &fileIndex{
-			name:  zf.Name,
+			name:  torrentCanonicalName(zf.Name),
 			index: k,
 		}
 	}
@@ -138,7 +146,7 @@ func (w *Writer) Close() error {
 	for _, fi := range fis {
 		fh := r.File[fi.index]
 		fi.offset = cw.count
-		err = writeHeader(cw, fh)
+		err = writeHeader(cw, fh, fi.name)
 		if err != nil {
 			return err
 		}
@@ -159,7 +167,7 @@ func (w *Writer) Close() error {
 
 	for _, fi := range fis {
 		fh := r.File[fi.index]
-		err = writeCentralHeader(mw, fh, fi.offset)
+		err = writeCentralHeader(mw, fh, fi.name, fi.offset)
 		if err != nil {
 			return err
 		}
@@ -197,7 +205,7 @@ func (w *Writer) Close() error {
 	return nil
 }
 
-func writeHeader(w io.Writer, h *czip.File) error {
+func writeHeader(w io.Writer, h *czip.File, canonicalName string) error {
 	var buf [fileHeaderLen]byte
 	b := writeBuf(buf[:])
 	b.uint32(uint32(fileHeaderSignature))
@@ -209,18 +217,18 @@ func writeHeader(w io.Writer, h *czip.File) error {
 	b.uint32(h.CRC32)
 	b.uint32(h.CompressedSize)
 	b.uint32(h.UncompressedSize)
-	b.uint16(uint16(len(h.Name)))
+	b.uint16(uint16(len(canonicalName)))
 	b.uint16(0)
 	if _, err := w.Write(buf[:]); err != nil {
 		return err
 	}
-	if _, err := io.WriteString(w, h.Name); err != nil {
+	if _, err := io.WriteString(w, canonicalName); err != nil {
 		return err
 	}
 	return nil
 }
 
-func writeCentralHeader(w io.Writer, h *czip.File, offset int64) error {
+func writeCentralHeader(w io.Writer, h *czip.File, canonicalName string, offset int64) error {
 	var buf [directoryHeaderLen]byte
 	b := writeBuf(buf[:])
 	b.uint32(uint32(directoryHeaderSignature))
@@ -233,7 +241,7 @@ func writeCentralHeader(w io.Writer, h *czip.File, offset int64) error {
 	b.uint32(h.CRC32)
 	b.uint32(h.CompressedSize)
 	b.uint32(h.UncompressedSize)
-	b.uint16(uint16(len(h.Name)))
+	b.uint16(uint16(len(canonicalName)))
 	b.uint16(0)
 	b.uint16(0)
 	b.uint16(0)
@@ -243,7 +251,7 @@ func writeCentralHeader(w io.Writer, h *czip.File, offset int64) error {
 	if _, err := w.Write(buf[:]); err != nil {
 		return err
 	}
-	if _, err := io.WriteString(w, h.Name); err != nil {
+	if _, err := io.WriteString(w, canonicalName); err != nil {
 		return err
 	}
 	return nil

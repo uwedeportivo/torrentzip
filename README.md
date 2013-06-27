@@ -6,7 +6,9 @@ torrentzip is a Go implementation of [trrntzip](http://trrntzip.sourceforge.net/
 The API of this Go implementation is identical to the [Writer](http://golang.org/pkg/archive/zip/#Writer) part of the 
 [archive/zip](http://golang.org/pkg/archive/zip) Go standard library package.
 
-## How to build zlib v1.2.8 from scratch on Microsoft Windows 64bit
+## zlib on Windows
+
+This section is about how to build zlib v1.2.8 from scratch on Microsoft Windows 64bit.
 
 In order to build zlib we will need to instal mingw64 and msys.
 

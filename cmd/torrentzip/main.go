@@ -32,6 +32,7 @@ package main
 
 import (
 	"bufio"
+	"bytes"
 	"crypto/sha1"
 	"encoding/hex"
 	"flag"
@@ -39,7 +40,10 @@ import (
 	"github.com/cheggaaa/pb"
 	"github.com/uwedeportivo/torrentzip"
 	"io"
+	"io/ioutil"
 	"os"
+	"path/filepath"
+	"strings"
 	"time"
 )
 
@@ -49,9 +53,66 @@ const (
 
 func usage() {
 	fmt.Fprintf(os.Stderr, "%s version %s, Copyright (c) 2013 Uwe Hoffmann. All rights reserved.\n", os.Args[0], versionStr)
-	fmt.Fprintf(os.Stderr, "\tUsage: %s -out <zipfile> <file 1> <file 2> ..... <file n>\n", os.Args[0])
+	fmt.Fprintf(os.Stderr, "\tUsage: %s -out <zipfile> <file or dir 1> <file or dir 2> ..... <file or dir n>\n", os.Args[0])
 	fmt.Fprintf(os.Stderr, "\nFlag defaults:\n")
 	flag.PrintDefaults()
+}
+
+type adderVisitor struct {
+	zw      *torrentzip.Writer
+	pwdName string
+}
+
+func (av *adderVisitor) relativeName(path string) string {
+	return filepath.Rel(av.pwdName, path)
+}
+
+func (av *adderVisitor) visit(path string, f os.FileInfo, err error) error {
+	if f.IsDir() {
+		isEmpty, err := dirEmpty(path)
+		if err != nil {
+			return err
+		}
+
+		if isEmpty {
+			var buf bytes.Buffer
+
+			fh, err := zw.Create(av.relativeName(path) + "/")
+			if err != nil {
+				return err
+			}
+
+			_, err = io.Copy(fh, buf)
+			if err != nil {
+				return err
+			}
+		}
+	} else {
+		cf, err := os.Open(path)
+		if err != nil {
+			return err
+		}
+		defer cf.Close()
+
+		fh, err := zw.Create(av.relativeName(path))
+		if err != nil {
+			return err
+		}
+
+		_, err = io.Copy(fh, cf)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func dirEmpty(dirname string) (bool, err) {
+	fs, err = ioutil.ReadDir(dirname)
+	if err != nil {
+		return false, err
+	}
+	return len(fs) == 0, nil
 }
 
 func main() {
@@ -102,23 +163,26 @@ func main() {
 	progress.ShowCounters = false
 	progress.Start()
 
+	pwdName, err := os.Getwd()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "cannot establish current working directory %v\n", err)
+		os.Exit(1)
+	}
+
+	av := &adderVisitor{
+		zw:      zw,
+		pwdName: pwdName,
+	}
+
 	for _, name := range flag.Args() {
-		cf, err := os.Open(name)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "opening file %s failed: %v\n", name, err)
-			os.Exit(1)
-		}
-		defer cf.Close()
-
-		fh, err := zw.Create(name)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "cannot create zip header for file %s: %v\n", name, err)
+		if strings.HasPrefix(name, filepath.Separator) {
+			fmt.Fprintf(os.Stderr, "cannot add absolute paths to a zip file:  %s\n", name)
 			os.Exit(1)
 		}
 
-		_, err = io.Copy(fh, cf)
+		err = filepath.Walk(name, av.visit)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "failed to write file %s into zip: %v\n", name, err)
+			fmt.Fprintf(os.Stderr, "adding files from %s failed: %v\n", name, err)
 			os.Exit(1)
 		}
 
