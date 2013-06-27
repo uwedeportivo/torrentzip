@@ -63,8 +63,11 @@ type adderVisitor struct {
 	pwdName string
 }
 
-func (av *adderVisitor) relativeName(path string) string {
-	return filepath.Rel(av.pwdName, path)
+func (av *adderVisitor) relativeName(path string) (string, error) {
+	if strings.HasPrefix(path, string(filepath.Separator)) {
+		return filepath.Rel(av.pwdName, path)
+	}
+	return path, nil
 }
 
 func (av *adderVisitor) visit(path string, f os.FileInfo, err error) error {
@@ -77,12 +80,17 @@ func (av *adderVisitor) visit(path string, f os.FileInfo, err error) error {
 		if isEmpty {
 			var buf bytes.Buffer
 
-			fh, err := zw.Create(av.relativeName(path) + "/")
+			relname, err := av.relativeName(path)
 			if err != nil {
 				return err
 			}
 
-			_, err = io.Copy(fh, buf)
+			fh, err := av.zw.Create(relname + "/")
+			if err != nil {
+				return err
+			}
+
+			_, err = io.Copy(fh, &buf)
 			if err != nil {
 				return err
 			}
@@ -94,7 +102,12 @@ func (av *adderVisitor) visit(path string, f os.FileInfo, err error) error {
 		}
 		defer cf.Close()
 
-		fh, err := zw.Create(av.relativeName(path))
+		relname, err := av.relativeName(path)
+		if err != nil {
+			return err
+		}
+
+		fh, err := av.zw.Create(relname)
 		if err != nil {
 			return err
 		}
@@ -107,8 +120,8 @@ func (av *adderVisitor) visit(path string, f os.FileInfo, err error) error {
 	return nil
 }
 
-func dirEmpty(dirname string) (bool, err) {
-	fs, err = ioutil.ReadDir(dirname)
+func dirEmpty(dirname string) (bool, error) {
+	fs, err := ioutil.ReadDir(dirname)
 	if err != nil {
 		return false, err
 	}
@@ -175,7 +188,7 @@ func main() {
 	}
 
 	for _, name := range flag.Args() {
-		if strings.HasPrefix(name, filepath.Separator) {
+		if strings.HasPrefix(name, string(filepath.Separator)) {
 			fmt.Fprintf(os.Stderr, "cannot add absolute paths to a zip file:  %s\n", name)
 			os.Exit(1)
 		}
