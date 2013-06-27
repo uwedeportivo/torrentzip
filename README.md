@@ -6,10 +6,26 @@ torrentzip is a Go implementation of [trrntzip](http://trrntzip.sourceforge.net/
 The API of this Go implementation is identical to the [Writer](http://golang.org/pkg/archive/zip/#Writer) part of the 
 [archive/zip](http://golang.org/pkg/archive/zip) Go standard library package.
 
-## How to build zlib v1.2.8 from scratch on windows 64bit
+## How to build zlib v1.2.8 from scratch on Microsoft Windows 64bit
 
-This section will contain information on how one can compile the needed zlib v1.2.8 library on 64bit windows machine using mingw.
+In order to build zlib we will need to instal mingw64 and msys.
 
+Kemovitra published a great how-to on installing both mingw64 and msys in this [blog entry.](http://kemovitra.blogspot.com/2012/11/installing-mingw-w64-on-windows.html#.UcdI4vmfh2F) When using this how-to, please keep in mind to use *c:\mingw* for both mingw64 and msys.
+
+Once installed we can download and build the 64-bit zlib.
+
+Download the [zlib v.1.2.8 source](http://www.zlib.net/) Once downloaded and unpacked, open a msys command prompt and execute the following command in the zlib v1.2.8  folder:
+
+    make -f win32/Makefile.gcc CC=x86_64-w64-mingw32-gcc RC=x86_64-w64-mingw32-windres
+
+Then install the files:
+
+    make -f win32/Makefile.gcc install BINARY_PATH=/mingw/bin INCLUDE_PATH=/mingw/include LIBRARY_PATH=/mingw/lib SHARED_MODE=1
+ 
+Lastly, copy the 
+> zlib1.dll
+
+to the location where you will later on also put the torrentzip.exe, as both files are needed for the application to work.
 
 ## Implementation
 
