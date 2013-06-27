@@ -6,6 +6,11 @@ torrentzip is a Go implementation of [trrntzip](http://trrntzip.sourceforge.net/
 The API of this Go implementation is identical to the [Writer](http://golang.org/pkg/archive/zip/#Writer) part of the 
 [archive/zip](http://golang.org/pkg/archive/zip) Go standard library package.
 
+## How to build zlib v1.2.8 from scratch on windows 64bit
+
+This section will contain information on how one can compile the needed zlib v1.2.8 library on 64bit windows machine using mingw.
+
+
 ## Implementation
 
 The implementation adapts [archive/zip](http://golang.org/pkg/archive/zip) to use [zlib](http://www.zlib.net/) instead of 
