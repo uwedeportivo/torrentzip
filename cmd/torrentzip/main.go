@@ -59,15 +59,28 @@ func usage() {
 }
 
 type adderVisitor struct {
-	zw      *torrentzip.Writer
-	pwdName string
+	zw             *torrentzip.Writer
+	pwdName        string
+	skipFirstLevel bool
 }
 
 func (av *adderVisitor) relativeName(path string) (string, error) {
+	rv := path
 	if strings.HasPrefix(path, string(filepath.Separator)) {
-		return filepath.Rel(av.pwdName, path)
+		rel, err := filepath.Rel(av.pwdName, path)
+		if err != nil {
+			return "", err
+		}
+		rv = rel
 	}
-	return path, nil
+
+	if av.skipFirstLevel {
+		si := strings.Index(rv, string(filepath.Separator))
+		if si != -1 && len(rv) > si {
+			rv = rv[si+1:]
+		}
+	}
+	return rv, nil
 }
 
 func (av *adderVisitor) visit(path string, f os.FileInfo, err error) error {
@@ -192,6 +205,8 @@ func main() {
 			fmt.Fprintf(os.Stderr, "cannot add absolute paths to a zip file:  %s\n", name)
 			os.Exit(1)
 		}
+
+		av.skipFirstLevel = strings.HasSuffix(name, string(filepath.Separator))
 
 		err = filepath.Walk(name, av.visit)
 		if err != nil {
