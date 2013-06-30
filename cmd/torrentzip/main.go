@@ -66,8 +66,8 @@ type adderVisitor struct {
 
 func (av *adderVisitor) relativeName(path string) (string, error) {
 	rv := path
-	if strings.HasPrefix(path, string(filepath.Separator)) {
-		rel, err := filepath.Rel(av.pwdName, path)
+	if filepath.IsAbs(rv) {
+		rel, err := filepath.Rel(av.pwdName, rv)
 		if err != nil {
 			return "", err
 		}
@@ -84,6 +84,9 @@ func (av *adderVisitor) relativeName(path string) (string, error) {
 }
 
 func (av *adderVisitor) visit(path string, f os.FileInfo, err error) error {
+	if f == nil {
+		return fmt.Errorf("received nil os.FileInfo while visiting %s", path)
+	}
 	if f.IsDir() {
 		isEmpty, err := dirEmpty(path)
 		if err != nil {
@@ -201,7 +204,7 @@ func main() {
 	}
 
 	for _, name := range flag.Args() {
-		if strings.HasPrefix(name, string(filepath.Separator)) {
+		if filepath.IsAbs(name) {
 			fmt.Fprintf(os.Stderr, "cannot add absolute paths to a zip file:  %s\n", name)
 			os.Exit(1)
 		}
