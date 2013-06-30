@@ -31,8 +31,8 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 package main
 
 import (
+	"bytes"
 	"crypto/sha1"
-	"encoding/hex"
 	"flag"
 	"fmt"
 	"github.com/cheggaaa/pb"
@@ -40,6 +40,7 @@ import (
 	"github.com/uwedeportivo/torrentzip/czip"
 	"io"
 	"io/ioutil"
+	"math"
 	"os"
 	"path/filepath"
 	"sync"
@@ -85,8 +86,10 @@ type testWorker struct {
 }
 
 func (tw *testWorker) run() {
+	var truemb float64
 	for wu := range tw.inwork {
 		path := wu.path
+
 		goldensha1, err := hashZip(path)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "cannot read from %s: %v, copying it into %s\n", path, err, tw.failpath)
@@ -105,7 +108,17 @@ func (tw *testWorker) run() {
 			}
 		}
 
-		tw.byteProgress.Add(int(wu.size / megabyte))
+		truemb += float64(wu.size) / float64(megabyte)
+
+		if tw.byteProgress != nil {
+			if truemb >= 1.0 {
+				floor := math.Floor(truemb)
+				delta := truemb - floor
+				v := int(floor)
+				tw.byteProgress.Add(v)
+				truemb = delta
+			}
+		}
 		tw.wg.Done()
 	}
 }
@@ -126,10 +139,10 @@ func (tw *testWorker) copyFile(src string) (int64, error) {
 	return io.Copy(df, sf)
 }
 
-func hashZip(path string) (string, error) {
+func hashZip(path string) ([]byte, error) {
 	r, err := os.Open(path)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 	defer r.Close()
 
@@ -137,13 +150,13 @@ func hashZip(path string) (string, error) {
 
 	_, err = io.Copy(hh, r)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 
-	return hex.EncodeToString(hh.Sum(nil)), nil
+	return hh.Sum(nil), nil
 }
 
-func testZip(path string, goldensha1 string) error {
+func testZip(path string, goldensha1 []byte) error {
 	r, err := czip.OpenReader(path)
 	if err != nil {
 		return err
@@ -198,9 +211,9 @@ func testZip(path string, goldensha1 string) error {
 		return err
 	}
 
-	testsha1 := hex.EncodeToString(hh.Sum(nil))
+	testsha1 := hh.Sum(nil)
 
-	if testsha1 != goldensha1 {
+	if !bytes.Equal(testsha1, goldensha1) {
 		return fmt.Errorf("produced torrentzip for %s differs from golden", path)
 	}
 
@@ -248,6 +261,8 @@ func main() {
 	cv := new(countVisitor)
 
 	for _, name := range flag.Args() {
+		fmt.Fprintf(os.Stdout, "initial scan of %s to determine amount of work\n", name)
+
 		err := filepath.Walk(name, cv.visit)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "failed to count in dir %s: %v\n", name, err)
@@ -255,10 +270,20 @@ func main() {
 		}
 	}
 
-	byteProgress := pb.New(int(cv.numBytes / megabyte))
-	byteProgress.RefreshRate = 5 * time.Second
-	byteProgress.ShowCounters = true
-	byteProgress.Start()
+	mg := int(cv.numBytes / megabyte)
+
+	fmt.Fprintf(os.Stdout, "found %d files and %d MB to do. starting work...\n", cv.numFiles, mg)
+
+	var byteProgress *pb.ProgressBar
+
+	if mg > 10 {
+		pb.BarStart = "MB ["
+
+		byteProgress = pb.New(mg)
+		byteProgress.RefreshRate = 5 * time.Second
+		byteProgress.ShowCounters = true
+		byteProgress.Start()
+	}
 
 	inwork := make(chan *workUnit)
 
@@ -289,7 +314,12 @@ func main() {
 	}
 
 	wg.Wait()
-
-	byteProgress.FinishPrint("Done scanning")
 	close(inwork)
+
+	if byteProgress != nil {
+		byteProgress.Set(int(byteProgress.Total))
+		byteProgress.Finish()
+	}
+
+	fmt.Fprintf(os.Stdout, "Done.\n")
 }
