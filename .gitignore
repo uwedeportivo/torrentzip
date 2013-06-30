@@ -35,7 +35,6 @@ _testmain.go
 *.jar
 *.rar
 *.tar
-*.zip
 
 # Logs and databases #
 ######################
