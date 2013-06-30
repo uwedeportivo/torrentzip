@@ -53,6 +53,7 @@ type testdataVisitor struct {
 
 func (tv *testdataVisitor) visit(path string, f os.FileInfo, err error) error {
 	if filepath.Ext(path) == zipext {
+		tv.t.Logf("testing file %s\n", path)
 		r, err := czip.OpenReader(path)
 		if err != nil {
 			return err
@@ -99,7 +100,10 @@ func (tv *testdataVisitor) visit(path string, f os.FileInfo, err error) error {
 		testsha1 := hex.EncodeToString(hh.Sum(nil))
 		goldensha1 := strings.TrimSuffix(filepath.Base(path), zipext)
 
-		if testsha1 != goldensha1 {
+		tv.t.Logf("testsha1=%s\n", testsha1)
+		tv.t.Logf("goldensha1=%s\n", goldensha1)
+
+		if testsha1 != strings.ToLower(goldensha1) {
 			return fmt.Errorf("produced torrentzip for %s differs from golden", path)
 		}
 
