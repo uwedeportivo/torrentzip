@@ -172,7 +172,7 @@ Another test that could be performed is checking for repeat file entries inside 
 
 Files in the czip folder are adapted from [archive/zip](http://golang.org/pkg/archive/zip) and are under the [Go license](http://golang.org/LICENSE).
 
-Files in the zlib folder are adapted from [vittess](https://code.google.com/p/vitess/) and are under [New BSD License](http://opensource.org/licenses/BSD-3-Clause).
+Files in the zlib and cgzip folders are from [vitess](https://code.google.com/p/vitess/) and are under [New BSD License](http://opensource.org/licenses/BSD-3-Clause).
 
 torrentzip.go is also under [Go license](http://golang.org/LICENSE).
 
