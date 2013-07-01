@@ -6,6 +6,7 @@ package czip
 
 import (
 	"bufio"
+	//"compress/flate"
 	"encoding/binary"
 	"errors"
 	"hash"
@@ -134,6 +135,8 @@ func (f *File) Open() (rc io.ReadCloser, err error) {
 		if err != nil {
 			return
 		}
+
+		//rc = flate.NewReader(r)
 	default:
 		err = ErrAlgorithm
 		return
