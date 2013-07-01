@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-package zlib
+package cgzip
 
 /*
 #cgo LDFLAGS: -lz
@@ -13,16 +13,14 @@ package zlib
 #include "zlib.h"
 
 // inflateInit2 is a macro, so using a wrapper function
-int zlibInflateInit(z_stream *strm) {
+int cgzipInflateInit(z_stream *strm) {
     strm->zalloc = Z_NULL;
     strm->zfree = Z_NULL;
     strm->opaque = Z_NULL;
     strm->avail_in = 0;
     strm->next_in = Z_NULL;
-    strm->avail_out = 0;
-	strm->next_out = NULL;
  return inflateInit2(strm,
-                     -15);
+                     16+15); // 16 makes it understand only gzip files
 }
 */
 import "C"
@@ -51,9 +49,9 @@ func NewReader(r io.Reader) (io.ReadCloser, error) {
 
 func NewReaderBuffer(r io.Reader, bufferSize int) (io.ReadCloser, error) {
 	z := &reader{r: r, in: make([]byte, bufferSize)}
-	result := C.zlibInflateInit(&z.strm)
+	result := C.cgzipInflateInit(&z.strm)
 	if result != Z_OK {
-		return nil, fmt.Errorf("zlib: failed to initialize (%v): %v", result, C.GoString(z.strm.msg))
+		return nil, fmt.Errorf("cgzip: failed to initialize (%v): %v", result, C.GoString(z.strm.msg))
 	}
 	return z, nil
 }
@@ -94,7 +92,7 @@ func (z *reader) Read(p []byte) (int, error) {
 			ret = Z_DATA_ERROR
 			fallthrough
 		case Z_DATA_ERROR, Z_MEM_ERROR:
-			z.err = fmt.Errorf("zlib: failed to inflate (%v): %v", ret, C.GoString(z.strm.msg))
+			z.err = fmt.Errorf("cgzip: failed to inflate (%v): %v", ret, C.GoString(z.strm.msg))
 			C.inflateEnd(&z.strm)
 			return 0, z.err
 		}
