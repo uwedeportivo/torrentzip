@@ -32,9 +32,9 @@ to the location where you will later on also put the torrentzip.exe, as both fil
 ## Implementation
 
 The implementation adapts [archive/zip](http://golang.org/pkg/archive/zip) to use [zlib](http://www.zlib.net/) instead of 
-the Go standard package [compress/flate](http://golang.org/pkg/compress/flate). This is necessary because the torrentzip standard requires zlib. Integrating zlib was done similar to how [vittess](https://code.google.com/p/vitess/) did it.
+the Go standard package [compress/flate](http://golang.org/pkg/compress/flate). This is necessary because the torrentzip standard requires zlib. Integrating zlib was done similar to how [vitess](https://code.google.com/p/vitess/) did it.
 
-The torrentzip format does not allow data declaration sections. This implies that the zip file headers need to know compressed sizes. This was solved by first writing into a temp file using data declaration section and then writing it to the specified io.Writer with torrentzip headers.
+The torrentzip format does not allow data declaration sections. This implies that the zip file headers need to know compressed sizes. This was solved by first writing into a temp file using data declaration section and then writing it to the specified io.Writer with torrentzip headers (compression is done only once).
 
 ## Format explained
 
