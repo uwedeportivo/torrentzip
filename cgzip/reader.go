@@ -22,6 +22,10 @@ int cgzipInflateInit(z_stream *strm) {
  return inflateInit2(strm,
                      16+15); // 16 makes it understand only gzip files
 }
+
+int cgzipGetHeader(z_stream *strm, gz_header *h) {
+	return inflateGetHeader(strm, h);
+}
 */
 import "C"
 
@@ -35,20 +39,21 @@ import (
 // we will call inflateEnd when we set err to a value:
 // - whatever error is returned by the underlying reader
 // - io.EOF if Close was called
-type reader struct {
+type Reader struct {
 	r      io.Reader
 	in     []byte
 	strm   C.z_stream
+	header C.gz_header
 	err    error
 	skipIn bool
 }
 
-func NewReader(r io.Reader) (io.ReadCloser, error) {
+func NewReader(r io.Reader) (*Reader, error) {
 	return NewReaderBuffer(r, DEFAULT_COMPRESSED_BUFFER_SIZE)
 }
 
-func NewReaderBuffer(r io.Reader, bufferSize int) (io.ReadCloser, error) {
-	z := &reader{r: r, in: make([]byte, bufferSize)}
+func NewReaderBuffer(r io.Reader, bufferSize int) (*Reader, error) {
+	z := &Reader{r: r, in: make([]byte, bufferSize)}
 	result := C.cgzipInflateInit(&z.strm)
 	if result != Z_OK {
 		return nil, fmt.Errorf("cgzip: failed to initialize (%v): %v", result, C.GoString(z.strm.msg))
@@ -56,7 +61,33 @@ func NewReaderBuffer(r io.Reader, bufferSize int) (io.ReadCloser, error) {
 	return z, nil
 }
 
-func (z *reader) Read(p []byte) (int, error) {
+func (z *Reader) RequestExtraHeader(buffer []byte) error {
+	if len(buffer) == 0 {
+		return nil
+	}
+
+	z.header.extra = (*C.Bytef)(unsafe.Pointer(&buffer[0]))
+	z.header.extra_max = (C.uInt)(len(buffer))
+
+	result := C.cgzipGetHeader(&z.strm, &z.header)
+	if result != Z_OK {
+		return fmt.Errorf("cgzip: failed to request extra header (%v): %v", result, C.GoString(z.strm.msg))
+	}
+
+	return nil
+}
+
+func (z *Reader) GetExtraHeader() []byte {
+	if z.header.extra_len == 0 {
+		return nil
+	}
+
+	var b []byte
+	b = (*[1 << 30]byte)(unsafe.Pointer(z.header.extra))[0:int(z.header.extra_len)]
+	return b
+}
+
+func (z *Reader) Read(p []byte) (int, error) {
 	if z.err != nil {
 		return 0, z.err
 	}
@@ -108,7 +139,7 @@ func (z *reader) Read(p []byte) (int, error) {
 }
 
 // Close closes the Reader. It does not close the underlying io.Reader.
-func (z *reader) Close() error {
+func (z *Reader) Close() error {
 	if z.err != nil {
 		if z.err != io.EOF {
 			return z.err

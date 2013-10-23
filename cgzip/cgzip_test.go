@@ -299,3 +299,70 @@ func TestCompare(t *testing.T) {
 func TestCompareBest(t *testing.T) {
 	runCompare(t, 1*1024*1024, 9)
 }
+
+func TestExtraHeader(t *testing.T) {
+	testSize := 1024 * 1024
+	toEncode := make([]byte, testSize)
+	where := 0
+	for where < testSize {
+		toFill := rand.Intn(16)
+		filler := 0x61 + rand.Intn(24)
+		for i := 0; i < toFill && where < testSize; i++ {
+			toEncode[where] = byte(filler)
+			where++
+		}
+	}
+
+	compressed := &bytes.Buffer{}
+	reader := bytes.NewBuffer(toEncode)
+	cgz := NewWriter(compressed)
+
+	extra := []byte("organic green tea")
+	err := cgz.SetExtraHeader(extra)
+	if err != nil {
+		t.Errorf("Setting extra header failed: %v", err)
+	}
+
+	_, err = io.Copy(cgz, reader)
+	if err != nil {
+		t.Errorf("Copy failed: %v", err)
+	}
+	if err := cgz.Flush(); err != nil {
+		t.Errorf("Flush failed: %v", err)
+	}
+	if err := cgz.Close(); err != nil {
+		t.Errorf("Close failed: %v", err)
+	}
+
+	cgzr, err := NewReader(compressed)
+	if err != nil {
+		t.Errorf("NewReader failed: %v", err)
+	}
+
+	extrar := make([]byte, len(extra))
+	err = cgzr.RequestExtraHeader(extrar)
+	if err != nil {
+		t.Errorf("Request extra header failed: %v", err)
+	}
+
+	decoded := &bytes.Buffer{}
+
+	_, err = io.Copy(decoded, cgzr)
+	if err != nil {
+		t.Errorf("Copy failed: %v", err)
+	}
+
+	extrar = cgzr.GetExtraHeader()
+	if !bytes.Equal(extra, extrar) {
+		t.Errorf("extra headers differ: original = %s, decoded = %s, len original = %d, len decoded = %d",
+			string(extra), string(extrar), len(extra), len(extrar))
+	}
+
+	if err := cgzr.Close(); err != nil {
+		t.Errorf("Close failed: %v", err)
+	}
+
+	if !bytes.Equal(toEncode, decoded.Bytes()) {
+		t.Error("toEncode and decoded differ")
+	}
+}

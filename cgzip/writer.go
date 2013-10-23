@@ -24,6 +24,10 @@ int cgzipDeflateInit(z_stream *strm, int level) {
                         16+15, // 16 makes it a gzip file, 15 is default
                         8, Z_DEFAULT_STRATEGY); // default values
 }
+
+int cgzipSetHeader(z_stream *strm, gz_header *h) {
+	return deflateSetHeader(strm, h);
+}
 */
 import "C"
 
@@ -71,10 +75,11 @@ const (
 // - whatever error is returned by the underlying writer
 // - io.EOF if Close was called
 type Writer struct {
-	w    io.Writer
-	out  []byte
-	strm C.z_stream
-	err  error
+	w      io.Writer
+	out    []byte
+	strm   C.z_stream
+	header C.gz_header
+	err    error
 }
 
 func NewWriter(w io.Writer) *Writer {
@@ -93,6 +98,20 @@ func NewWriterLevelBuffer(w io.Writer, level, bufferSize int) (*Writer, error) {
 		return nil, fmt.Errorf("cgzip: failed to initialize (%v): %v", result, C.GoString(z.strm.msg))
 	}
 	return z, nil
+}
+
+func (z *Writer) SetExtraHeader(data []byte) error {
+	if len(data) == 0 {
+		return nil
+	}
+	z.header.extra = (*C.Bytef)(unsafe.Pointer(&data[0]))
+	z.header.extra_len = (C.uInt)(len(data))
+
+	result := C.cgzipSetHeader(&z.strm, &z.header)
+	if result != Z_OK {
+		return fmt.Errorf("cgzip: failed to set extra header (%v): %v", result, C.GoString(z.strm.msg))
+	}
+	return nil
 }
 
 // this is the main function: it advances the write with either
