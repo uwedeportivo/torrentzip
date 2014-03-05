@@ -15,6 +15,7 @@ import (
 	"io/ioutil"
 	"os"
 
+	"github.com/golang/glog"
 	"github.com/uwedeportivo/torrentzip/zlib"
 )
 
@@ -203,13 +204,14 @@ func (r *checksumReader) Close() error { return r.rc.Close() }
 // findBodyOffset does the minimum work to verify the file has a header
 // and returns the file body offset.
 func (f *File) findBodyOffset() (int64, error) {
-	r := io.NewSectionReader(f.zipr, f.headerOffset, f.zipsize-f.headerOffset)
 	var buf [fileHeaderLen]byte
-	if _, err := io.ReadFull(r, buf[:]); err != nil {
+	if _, err := f.zipr.ReadAt(buf[:], f.headerOffset); err != nil {
 		return 0, err
 	}
 	b := readBuf(buf[:])
 	if sig := b.uint32(); sig != fileHeaderSignature {
+		glog.Errorf("zip: not a valid zip file: findBodyOffset: sig=%d,  fileHeaderSignature=%d",
+			sig, fileHeaderSignature)
 		return 0, ErrFormat
 	}
 	b = b[22:] // skip over most of the header
@@ -228,6 +230,8 @@ func readDirectoryHeader(f *File, r io.Reader) error {
 	}
 	b := readBuf(buf[:])
 	if sig := b.uint32(); sig != directoryHeaderSignature {
+		glog.Errorf("zip: not a valid zip file: readDirectoryHeader 1: sig=%d,  directoryHeaderSignature=%d",
+			sig, directoryHeaderSignature)
 		return ErrFormat
 	}
 	f.CreatorVersion = b.uint16()
@@ -261,6 +265,8 @@ func readDirectoryHeader(f *File, r io.Reader) error {
 			tag := b.uint16()
 			size := b.uint16()
 			if int(size) > len(b) {
+				glog.Errorf("zip: not a valid zip file: readDirectoryHeader 2: int(size)=%d,  len(b)=%d",
+					int(size), len(b))
 				return ErrFormat
 			}
 			if tag == zip64ExtraId {
@@ -280,6 +286,7 @@ func readDirectoryHeader(f *File, r io.Reader) error {
 		}
 		// Should have consumed the whole header.
 		if len(b) != 0 {
+			glog.Errorf("zip: not a valid zip file: readDirectoryHeader 3: len(b)=%d", len(b))
 			return ErrFormat
 		}
 	}
@@ -344,6 +351,7 @@ func readDirectoryEnd(r io.ReaderAt, size int64) (dir *directoryEnd, err error) 
 			break
 		}
 		if i == 1 || bLen == size {
+			glog.Errorf("zip: not a valid zip file: readDirectoryEnd 1: i=%d, bLen=%d, size=%d", i, bLen, size)
 			return nil, ErrFormat
 		}
 	}
@@ -375,6 +383,7 @@ func readDirectoryEnd(r io.ReaderAt, size int64) (dir *directoryEnd, err error) 
 
 	// Make sure directoryOffset points to somewhere in our file.
 	if o := int64(d.directoryOffset); o < 0 || o >= size {
+		glog.Errorf("zip: not a valid zip file: readDirectoryEnd 2: o=%d, size=%d", o, size)
 		return nil, ErrFormat
 	}
 	return d, nil
@@ -411,6 +420,8 @@ func readDirectory64End(r io.ReaderAt, offset int64, d *directoryEnd) (err error
 
 	b := readBuf(buf)
 	if sig := b.uint32(); sig != directory64EndSignature {
+		glog.Errorf("zip: not a valid zip file: readDirectory64End: sig=%d, directory64EndSignature=%d",
+			sig, directory64EndSignature)
 		return ErrFormat
 	}
 

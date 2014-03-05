@@ -99,6 +99,10 @@ func (z *reader) Read(p []byte) (int, error) {
 			return 0, z.err
 		}
 
+		if z.err == nil && ret == Z_STREAM_END {
+			z.err = io.EOF
+		}
+
 		// if we read something, we're good
 		have := len(p) - int(z.strm.avail_out)
 		if have > 0 {
@@ -106,7 +110,6 @@ func (z *reader) Read(p []byte) (int, error) {
 			return have, z.err
 		}
 	}
-	panic("Unreachable")
 }
 
 // Close closes the Reader. It does not close the underlying io.Reader.
