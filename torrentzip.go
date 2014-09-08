@@ -79,9 +79,13 @@ type Writer struct {
 }
 
 func NewWriter(w io.Writer) (*Writer, error) {
+	return NewWriterWithTemp(w, "")
+}
+
+func NewWriterWithTemp(w io.Writer, tempDir string) (*Writer, error) {
 	r := new(Writer)
 
-	tf, err := ioutil.TempFile("", "torrentzip")
+	tf, err := ioutil.TempFile(tempDir, "torrentzip")
 	if err != nil {
 		return nil, err
 	}
