@@ -327,36 +327,62 @@ func writeCentralHeader(w io.Writer, h *czip.File, canonicalName string, offset 
 	b.uint16(48128)
 	b.uint16(8600)
 	b.uint32(h.CRC32)
-	if isZip64(h) || offset > uint32max {
-		// the file needs a zip64 header. store maxint in both
-		// 32 bit size fields (and offset later) to signal that the
-		// zip64 extra header should be used.
-		b.uint32(uint32max) // compressed size
-		b.uint32(uint32max) // uncompressed size
 
-		// append a zip64 extra block to Extra
-		var buf [20]byte
-		eb := writeBuf(buf[:])
-		eb.uint16(zip64ExtraId)
-		if offset > uint32max {
-			eb.uint16(24)
-		} else {
-			eb.uint16(16)
-		}
-		eb.uint64(h.UncompressedSize64)
-		eb.uint64(h.CompressedSize64)
-		h.Extra = append(h.Extra, buf[:]...)
-		if offset > uint32max {
-			var obuf [8]byte
-			ob := writeBuf(obuf[:])
-			ob.uint64(uint64(offset))
-			h.Extra = append(h.Extra, obuf[:]...)
-		}
+	if h.CompressedSize64 > uint32max {
+		b.uint32(uint32max)
 	} else {
-		b.uint32(h.CompressedSize)
-		b.uint32(h.UncompressedSize)
+		b.uint32(uint32(h.CompressedSize64))
 	}
+
+	if h.UncompressedSize64 > uint32max {
+		b.uint32(uint32max)
+	} else {
+		b.uint32(uint32(h.UncompressedSize64))
+	}
+
 	b.uint16(uint16(len(canonicalName)))
+	if isZip64(h) || offset > uint32max {
+		var esize uint16
+
+		if h.CompressedSize64 > uint32max {
+			esize += 8
+		}
+
+		if h.UncompressedSize64 > uint32max {
+			esize += 8
+		}
+
+		if offset > uint32max {
+			esize += 8
+		}
+
+		var b1 [4]byte
+		eb := writeBuf(b1[:])
+		eb.uint16(zip64ExtraId)
+		eb.uint16(esize)
+		h.Extra = append(h.Extra, b1[:]...)
+
+		if h.UncompressedSize64 > uint32max {
+			var b2 [8]byte
+			eb := writeBuf(b2[:])
+			eb.uint64(h.UncompressedSize64)
+			h.Extra = append(h.Extra, b2[:]...)
+		}
+
+		if h.CompressedSize64 > uint32max {
+			var b2 [8]byte
+			eb := writeBuf(b2[:])
+			eb.uint64(h.CompressedSize64)
+			h.Extra = append(h.Extra, b2[:]...)
+		}
+
+		if offset > uint32max {
+			var b3 [8]byte
+			eb := writeBuf(b3[:])
+			eb.uint64(uint64(offset))
+			h.Extra = append(h.Extra, b3[:]...)
+		}
+	}
 	b.uint16(uint16(len(h.Extra)))
 	b.uint16(0)
 	b.uint16(0)
