@@ -4,36 +4,7 @@
 
 package cgzip
 
-/*
-#cgo LDFLAGS: -lz
-
-#cgo windows LDFLAGS: -Lc:/mingw/lib
-#cgo windows CFLAGS: -Ic:/mingw/include
-
-#include "zlib.h"
-
-// inflateInit2 is a macro, so using a wrapper function
-int cgzipInflateInit(z_stream *strm) {
-    strm->zalloc = Z_NULL;
-    strm->zfree = Z_NULL;
-    strm->opaque = Z_NULL;
-    strm->avail_in = 0;
-    strm->next_in = Z_NULL;
- return inflateInit2(strm,
-                     16+15); // 16 makes it understand only gzip files
-}
-
-int cgzipGetHeader(z_stream *strm, gz_header *h) {
-	return inflateGetHeader(strm, h);
-}
-*/
-import "C"
-
-import (
-	"fmt"
-	"io"
-	"unsafe"
-)
+import "io"
 
 // err starts out as nil
 // we will call inflateEnd when we set err to a value:
@@ -42,10 +13,11 @@ import (
 type Reader struct {
 	r      io.Reader
 	in     []byte
-	strm   C.z_stream
-	header C.gz_header
+	strm   zstream
+	header zheader
 	err    error
 	skipIn bool
+	extra  []byte
 }
 
 func NewReader(r io.Reader) (*Reader, error) {
@@ -54,37 +26,30 @@ func NewReader(r io.Reader) (*Reader, error) {
 
 func NewReaderBuffer(r io.Reader, bufferSize int) (*Reader, error) {
 	z := &Reader{r: r, in: make([]byte, bufferSize)}
-	result := C.cgzipInflateInit(&z.strm)
-	if result != Z_OK {
-		return nil, fmt.Errorf("cgzip: failed to initialize (%v): %v", result, C.GoString(z.strm.msg))
+	if err := z.strm.inflateInit(); err != nil {
+		return nil, err
 	}
 	return z, nil
 }
 
 func (z *Reader) RequestExtraHeader(buffer []byte) error {
+	z.extra = buffer
 	if len(buffer) == 0 {
 		return nil
 	}
 
-	z.header.extra = (*C.Bytef)(unsafe.Pointer(&buffer[0]))
-	z.header.extra_max = (C.uInt)(len(buffer))
+	z.header.declareHeaderExtra(buffer)
 
-	result := C.cgzipGetHeader(&z.strm, &z.header)
-	if result != Z_OK {
-		return fmt.Errorf("cgzip: failed to request extra header (%v): %v", result, C.GoString(z.strm.msg))
+	err := z.header.getHeaderExtra(&z.strm)
+	if err != nil {
+		return err
 	}
 
 	return nil
 }
 
 func (z *Reader) GetExtraHeader() []byte {
-	if z.header.extra_len == 0 {
-		return nil
-	}
-
-	var b []byte
-	b = (*[1 << 30]byte)(unsafe.Pointer(z.header.extra))[0:int(z.header.extra_len)]
-	return b
+	return z.extra
 }
 
 func (z *Reader) Read(p []byte) (int, error) {
@@ -97,45 +62,50 @@ func (z *Reader) Read(p []byte) (int, error) {
 	}
 
 	// read and deflate until the output buffer is full
-	z.strm.next_out = (*C.Bytef)(unsafe.Pointer(&p[0]))
-	z.strm.avail_out = (C.uInt)(len(p))
+	z.strm.setOutBuf(p, len(p))
 
 	for {
 		// if we have no data to inflate, read more
-		if !z.skipIn && z.strm.avail_in == 0 {
+		if !z.skipIn && z.strm.availIn() == 0 {
 			var n int
 			n, z.err = z.r.Read(z.in)
+			// If we got data and EOF, pretend we didn't get the
+			// EOF.  That way we will return the right values
+			// upstream.  Note this will trigger another read
+			// later on, that should return (0, EOF).
+			if n > 0 && z.err == io.EOF {
+				z.err = nil
+			}
+
+			// FIXME(alainjobart) this code is not compliant with
+			// the Reader interface. We should process all the
+			// data we got from the reader, and then return the
+			// error, whatever it is.
 			if (z.err != nil && z.err != io.EOF) || (n == 0 && z.err == io.EOF) {
-				C.inflateEnd(&z.strm)
+				z.strm.inflateEnd()
 				return 0, z.err
 			}
 
-			z.strm.next_in = (*C.Bytef)(unsafe.Pointer(&z.in[0]))
-			z.strm.avail_in = (C.uInt)(n)
+			z.strm.setInBuf(z.in, n)
 		} else {
 			z.skipIn = false
 		}
 
 		// inflate some
-		ret := C.inflate(&z.strm, C.Z_NO_FLUSH)
-		switch ret {
-		case Z_NEED_DICT:
-			ret = Z_DATA_ERROR
-			fallthrough
-		case Z_DATA_ERROR, Z_MEM_ERROR:
-			z.err = fmt.Errorf("cgzip: failed to inflate (%v): %v", ret, C.GoString(z.strm.msg))
-			C.inflateEnd(&z.strm)
+		ret, err := z.strm.inflate(zNoFlush)
+		if err != nil {
+			z.err = err
+			z.strm.inflateEnd()
 			return 0, z.err
 		}
 
 		// if we read something, we're good
-		have := len(p) - int(z.strm.avail_out)
+		have := len(p) - z.strm.availOut()
 		if have > 0 {
-			z.skipIn = ret == Z_OK && z.strm.avail_out == 0
+			z.skipIn = ret == Z_OK && z.strm.availOut() == 0
 			return have, z.err
 		}
 	}
-	panic("Unreachable")
 }
 
 // Close closes the Reader. It does not close the underlying io.Reader.
@@ -146,7 +116,7 @@ func (z *Reader) Close() error {
 		}
 		return nil
 	}
-	C.inflateEnd(&z.strm)
+	z.strm.inflateEnd()
 	z.err = io.EOF
 	return nil
 }
