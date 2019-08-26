@@ -14,8 +14,10 @@ package cgzip
 
 #include "zlib.h"
 
-int cgzipSetHeader(char *strm, gz_header *h) {
-	return deflateSetHeader((z_stream *)strm, h);
+int cgzipSetHeader(char *strm, char *h, void *buf, unsigned int len) {
+    ((gz_header*)h)->extra = (Bytef*)buf;
+    ((gz_header*)h)->extra_len = len;
+	return deflateSetHeader((z_stream *)strm, ((gz_header*)h));
 }
 */
 import "C"
@@ -67,7 +69,7 @@ type Writer struct {
 	w      io.Writer
 	out    []byte
 	strm   zstream
-	header C.gz_header
+	header zheader
 	err    error
 }
 
@@ -92,10 +94,8 @@ func (z *Writer) SetExtraHeader(data []byte) error {
 	if len(data) == 0 {
 		return nil
 	}
-	z.header.extra = (*C.Bytef)(unsafe.Pointer(&data[0]))
-	z.header.extra_len = (C.uInt)(len(data))
 
-	result := C.cgzipSetHeader(&z.strm[0], &z.header)
+	result := C.cgzipSetHeader(&z.strm[0], &z.header[0], unsafe.Pointer(&data[0]), C.uint(len(data)))
 	if result != Z_OK {
 		return fmt.Errorf("cgzip: failed to set extra header (%v): %v", result, z.strm.msg())
 	}

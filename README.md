@@ -1,6 +1,9 @@
 torrentzip
 ==========
 
+[![Build Status](https://travis-ci.com/uwedeportivo/torrentzip.svg?branch=master)](https://travis-ci.com/uwedeportivo/torrentzip)
+
+
 torrentzip is a Go implementation of [trrntzip](http://trrntzip.sourceforge.net/). It is used to create zip files that are consistent: if two zip creators add the exact same files and directories to their zip files, they produce the bit-exact same  zip files, independent of platform they're on (Windows, Mac, Linux, etc) and independent of file metadata (creation time, modified time, etc) of the files added.
 
 The API of this Go implementation is identical to the [Writer](http://golang.org/pkg/archive/zip/#Writer) part of the 

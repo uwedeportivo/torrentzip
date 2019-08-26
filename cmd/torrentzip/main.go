@@ -37,14 +37,13 @@ import (
 	"encoding/hex"
 	"flag"
 	"fmt"
-	"github.com/cheggaaa/pb"
-	"github.com/uwedeportivo/torrentzip"
 	"io"
 	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strings"
-	"time"
+
+	"github.com/uwedeportivo/torrentzip"
 )
 
 const (
@@ -187,11 +186,6 @@ func main() {
 		os.Exit(1)
 	}
 
-	progress := pb.New(len(flag.Args()) + 1)
-	progress.RefreshRate = 5 * time.Second
-	progress.ShowCounters = false
-	progress.Start()
-
 	pwdName, err := os.Getwd()
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "cannot establish current working directory %v\n", err)
@@ -217,7 +211,6 @@ func main() {
 			os.Exit(1)
 		}
 
-		progress.Increment()
 	}
 
 	err = zw.Close()
@@ -225,10 +218,6 @@ func main() {
 		fmt.Fprintf(os.Stderr, "failed to close zip file %s: %v\n", *outpath, err)
 		os.Exit(1)
 	}
-
-	progress.Increment()
-
-	progress.Finish()
 
 	fmt.Fprintf(os.Stdout, "finished creating zip file: %s\n", *outpath)
 	fmt.Fprintf(os.Stdout, "sha1 of created zip file: %s\n", hex.EncodeToString(hh.Sum(nil)))

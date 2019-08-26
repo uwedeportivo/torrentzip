@@ -33,9 +33,10 @@ package main
 import (
 	"flag"
 	"fmt"
-	"github.com/uwedeportivo/torrentzip/czip"
 	"io"
 	"os"
+
+	"github.com/uwedeportivo/torrentzip/czip"
 )
 
 const (

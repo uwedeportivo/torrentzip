@@ -35,16 +35,14 @@ import (
 	"crypto/sha1"
 	"flag"
 	"fmt"
-	"github.com/cheggaaa/pb"
-	"github.com/uwedeportivo/torrentzip"
-	"github.com/uwedeportivo/torrentzip/czip"
 	"io"
 	"io/ioutil"
-	"math"
 	"os"
 	"path/filepath"
 	"sync"
-	"time"
+
+	"github.com/uwedeportivo/torrentzip"
+	"github.com/uwedeportivo/torrentzip/czip"
 )
 
 const (
@@ -80,7 +78,6 @@ func (sv *scanVisitor) visit(path string, f os.FileInfo, err error) error {
 
 type testWorker struct {
 	failpath     string
-	byteProgress *pb.ProgressBar
 	inwork       chan *workUnit
 	wg           *sync.WaitGroup
 }
@@ -110,15 +107,6 @@ func (tw *testWorker) run() {
 
 		truemb += float64(wu.size) / float64(megabyte)
 
-		if tw.byteProgress != nil {
-			if truemb >= 1.0 {
-				floor := math.Floor(truemb)
-				delta := truemb - floor
-				v := int(floor)
-				tw.byteProgress.Add(v)
-				truemb = delta
-			}
-		}
 		tw.wg.Done()
 	}
 }
@@ -274,16 +262,6 @@ func main() {
 
 	fmt.Fprintf(os.Stdout, "found %d files and %d MB to do. starting work...\n", cv.numFiles, mg)
 
-	var byteProgress *pb.ProgressBar
-
-	if mg > 10 {
-		pb.BarStart = "MB ["
-
-		byteProgress = pb.New(mg)
-		byteProgress.RefreshRate = 5 * time.Second
-		byteProgress.ShowCounters = true
-		byteProgress.Start()
-	}
 
 	inwork := make(chan *workUnit)
 
@@ -296,7 +274,6 @@ func main() {
 
 	for i := 0; i < 8; i++ {
 		worker := &testWorker{
-			byteProgress: byteProgress,
 			failpath:     *failpath,
 			inwork:       inwork,
 			wg:           wg,
@@ -315,11 +292,6 @@ func main() {
 
 	wg.Wait()
 	close(inwork)
-
-	if byteProgress != nil {
-		byteProgress.Set(int(byteProgress.Total))
-		byteProgress.Finish()
-	}
 
 	fmt.Fprintf(os.Stdout, "Done.\n")
 }
